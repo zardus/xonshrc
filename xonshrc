@@ -1,0 +1,17 @@
+import os
+
+_ORIG_PATH = list($PATH)
+_ORIG_PROMPT = $PROMPT
+
+def workon(venv):
+	venv_path = os.path.join($HOME, '.virtualenvs', venv)
+	if not os.path.exists(venv_path):
+		raise OSError("No such virtualenv: %s", venv_path)
+	$PATH = [ os.path.join(venv_path, 'bin') ] + _ORIG_PATH
+	$VIRTUAL_ENV = venv_path
+	$PROMPT = "(%s)" % venv + _ORIG_PROMPT
+
+def deactivate():
+	del $VIRTUAL_ENV
+	$PATH = list(_ORIG_PATH)
+	$PROMPT = _ORIG_PROMPT
