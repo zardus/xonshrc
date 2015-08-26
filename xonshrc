@@ -1,9 +1,15 @@
 import os
+import sys
+import binascii
 
 _ORIG_PATH = list($PATH)
 _ORIG_PROMPT = $PROMPT
 
-def workon(venv):
+#
+# python virtual environment stuff
+#
+
+def _workon(venv):
 	venv_path = os.path.join($HOME, '.virtualenvs', venv)
 	if not os.path.exists(venv_path):
 		raise OSError("No such virtualenv: %s", venv_path)
@@ -11,7 +17,85 @@ def workon(venv):
 	$VIRTUAL_ENV = venv_path
 	$PROMPT = "(%s)" % venv + _ORIG_PROMPT
 
-def deactivate():
+def _deactivate():
 	del $VIRTUAL_ENV
 	$PATH = list(_ORIG_PATH)
 	$PROMPT = _ORIG_PROMPT
+
+aliases['workon'] = lambda args, stdin=None: _workon(*args)
+aliases['deactivate'] = lambda args, stdin=None: _deactivate()
+
+#
+# encoding
+#
+
+def _to_bytes(what):
+	if isinstance(what, bytes):
+		return bytes
+	else:
+		return str.encode(what)
+
+def _write_bytes(what):
+	sys.stdout.buffer.write(what)
+
+aliases['hex_encode'] = lambda a,i=None: _write_bytes(binascii.hexlify(_to_bytes(i.strip() or a[0])) + b'\n')
+aliases['hex_decode'] = lambda a,i=None: _write_bytes(binascii.unhexlify(_to_bytes(i.strip() or a[0])) + b'\n')
+aliases['wtf'] = lambda a,i=None: print(repr(a),repr(i))
+
+#
+# multiple commands
+#
+
+def _snip_start(args):
+	if len(set([ a[0] for a in args])) == 1:
+		return _snip_start([ a[1:] for a in args])
+	else:
+		return args
+
+def _snip_end(args):
+	if len(set([ a[-1] for a in args])) == 1:
+		return _snip_end([ a[:-1] for a in args])
+	else:
+		return args
+
+def _make_callback(tag):
+	def callback(line, stdin, process):
+		sys.stdout.buffer.write(_to_bytes('%s: '%tag) + _to_bytes(line))
+	return callback
+
+try:
+	import sh
+	import mulpyplexer
+
+	def pyrallel(args):
+		return mulpyplexer.MP([sh.Command(a) for a in args])
+
+	def pyrallel_ssh(hosts, base_cmd="ssh", output=False, callback=None, bg=False):
+		sshs = [ ]
+		snipped = _snip_end(_snip_start(hosts))
+		for h,s in zip(hosts, snipped):
+			cmd = sh.Command(base_cmd)
+			cb = _make_callback(s) if output else callback
+			sshs.append(cmd.bake(h, _out=cb, _err=cb, _bg=bg))
+		return mulpyplexer.MP(sshs)
+
+	running_cmds = None
+	def _cmd_pyrallel_ssh(args, stdin=None):
+		global running_cmds
+
+		if not stdin:
+			print("Please provide some hosts on stdin.")
+			return
+		hosts = stdin.strip().split()
+		cmds = pyrallel_ssh(hosts, output=True, bg=True)
+		for a in args:
+			cmds = cmds.bake(a)
+		running_cmds[:] = cmds()
+		try:
+			running_cmds.wait()
+		except KeyboardInterrupt:
+			[ r.process.kill() for r in running_cmds ]
+
+	aliases['pyrallel_ssh'] = _cmd_pyrallel_ssh
+except ImportError:
+	pass
