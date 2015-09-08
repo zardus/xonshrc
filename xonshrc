@@ -6,6 +6,18 @@ _ORIG_PATH = list($PATH)
 _ORIG_PROMPT = $PROMPT
 
 #
+# convenience stuff, such as killing recent commands
+#
+
+def _kill_last(args, stdin=None):
+	if __xonsh_active_job__ is None:
+		print("No active job. Aborting.")
+		return
+	cmd = 'kill %s %d' % (''.join(args), __xonsh_all_jobs__[__xonsh_active_job__]['pgrp'])
+	os.system(cmd)
+aliases['kill_last'] = _kill_last
+
+#
 # python virtual environment stuff
 #
 
