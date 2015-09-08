@@ -9,7 +9,8 @@ _ORIG_PROMPT = $PROMPT
 # python virtual environment stuff
 #
 
-def _workon(venv):
+def _workon(args, stdin=None):
+	venv = args[0]
 	venv_path = os.path.join($HOME, '.virtualenvs', venv)
 	if not os.path.exists(venv_path):
 		raise OSError("No such virtualenv: %s", venv_path)
@@ -17,13 +18,13 @@ def _workon(venv):
 	$VIRTUAL_ENV = venv_path
 	$PROMPT = "(%s)" % venv + _ORIG_PROMPT
 
-def _deactivate():
+def _deactivate(args, stdin=None):
 	del $VIRTUAL_ENV
 	$PATH = list(_ORIG_PATH)
 	$PROMPT = _ORIG_PROMPT
 
-aliases['workon'] = lambda args, stdin=None: _workon(*args)
-aliases['deactivate'] = lambda args, stdin=None: _deactivate()
+aliases['workon'] = _workon
+aliases['deactivate'] = _deactivate
 
 #
 # encoding
